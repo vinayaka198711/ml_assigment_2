@@ -25,11 +25,21 @@ DATA_FILE = "wdbc.data"
 
 @st.cache_resource
 def train_base_pipeline():
-    """Trains all 5 baseline models on the local primary wdbc.data repository."""
+    """Trains all 5 baseline models using descriptive feature names to match test_data.csv."""
     if not os.path.exists(DATA_FILE):
         return None, None, None, None
         
-    column_names = ['id', 'diagnosis'] + [f'feature_{i}' for i in range(1, 31)]
+    # Define exact descriptive feature names to align perfectly with test_data.csv
+    column_names = [
+        'id', 'diagnosis',
+        'radius_mean', 'texture_mean', 'perimeter_mean', 'area_mean', 'smoothness_mean',
+        'compactness_mean', 'concavity_mean', 'concave_points_mean', 'symmetry_mean', 'fractal_dimension_mean',
+        'radius_se', 'texture_se', 'perimeter_se', 'area_se', 'smoothness_se',
+        'compactness_se', 'concavity_se', 'concave_points_se', 'symmetry_se', 'fractal_dimension_se',
+        'radius_worst', 'texture_worst', 'perimeter_worst', 'area_worst', 'smoothness_worst',
+        'compactness_worst', 'concavity_worst', 'concave_points_worst', 'symmetry_worst', 'fractal_dimension_worst'
+    ]
+    
     df = pd.read_csv(DATA_FILE, header=None, names=column_names)
     
     # Preprocess dimensions
@@ -44,8 +54,10 @@ def train_base_pipeline():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    
+    # Keep X_train and X_test as DataFrames with explicit column names
+    X_train_scaled = pd.DataFrame(scaler.fit_transform(X_train), columns=X.columns)
+    X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns=X.columns)
     
     trained_models = {
         "Logistic Regression": LogisticRegression(max_iter=10000, random_state=42),
@@ -95,7 +107,8 @@ else:
                 
             # Verify and scale incoming test feature dimensions
             if uploaded_df.shape[1] == 30:
-                X_eval = scaler.transform(uploaded_df)
+                # Transform into a DataFrame to preserve feature column tracking names
+                X_eval = pd.DataFrame(scaler.transform(uploaded_df), columns=default_X_test.columns)
                 st.success(f"✅ Successfully loaded custom test array with {uploaded_df.shape[0]} evaluation targets.")
             else:
                 st.warning(f"⚠️ Column shape mismatch. Upload features {uploaded_df.shape[1]} attributes instead of the requested 30 dimensions. Falling back to internal test set cache.")
