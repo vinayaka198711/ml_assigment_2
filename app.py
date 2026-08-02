@@ -86,7 +86,7 @@ else:
     
     uploaded_file = st.file_uploader("Upload your test dataset CSV file:", type=["csv"])
     
-    # Set fallback variables if no file is uploaded
+    # Set default static fallback selections
     X_eval = default_X_test
     y_eval = default_y_test
     
@@ -94,24 +94,34 @@ else:
         try:
             uploaded_df = pd.read_csv(uploaded_file)
             
-            # Extract diagnosis if present in the uploaded test set
+            # Clean up target and ID columns if present in uploaded test set
+            uploaded_y = None
             if 'diagnosis' in uploaded_df.columns:
                 if uploaded_df['diagnosis'].dtype == object:
-                    le = LabelEncoder()
-                    uploaded_df['diagnosis'] = le.fit_transform(uploaded_df['diagnosis'])
-                y_eval = uploaded_df['diagnosis'].values
+                    le_tmp = LabelEncoder()
+                    uploaded_y = le_tmp.fit_transform(uploaded_df['diagnosis'])
+                else:
+                    uploaded_y = uploaded_df['diagnosis'].values
                 uploaded_df = uploaded_df.drop(columns=['diagnosis'])
             
             if 'id' in uploaded_df.columns:
                 uploaded_df = uploaded_df.drop(columns=['id'])
                 
-            # FIXED LOGIC: Extract column count using .shape[1] instead of the tuple object
+            # FIXED TUPLE LENGTH LOGIC: Evaluate the length of the column shape tuple slice
             if uploaded_df.shape[1] == 30:
-                # Transform into a DataFrame to preserve feature column tracking names
                 X_eval = pd.DataFrame(scaler.transform(uploaded_df), columns=default_X_test.columns)
+                
+                # FIXED LENGTH ALIGNMENT: Ensure y_eval dynamically mirrors uploaded row counts
+                if uploaded_y is not None and len(uploaded_y) == len(uploaded_df):
+                    y_eval = uploaded_y
+                else:
+                    # Provide dummy array targets matching exact length of the file to stop 114 vs 2 crashes
+                    y_eval = np.zeros(len(uploaded_df), dtype=int)
+                    st.info(f"ℹ️ No target labels found in CSV. Metrics calculated using a dummy reference matching your {len(uploaded_df)} samples.")
+                    
                 st.success(f"✅ Successfully loaded custom test array with {uploaded_df.shape[0]} samples.")
             else:
-                st.warning(f"⚠️ Column shape mismatch. Upload features {uploaded_df.shape[1]} attributes instead of the requested 30 dimensions. Falling back to internal test set cache.")
+                st.warning(f"⚠️ Column shape mismatch. Upload features {uploaded_df.shape[1]} attributes instead of 30 dimensions. Falling back to default test cache.")
         except Exception as e:
             st.error(f"❌ Upload parsing failure: {str(e)}")
 
@@ -136,9 +146,15 @@ else:
     st.markdown("---")
     st.header(f"📊 c. Evaluation Metrics Matrix for {selected_model_name}")
     
+    # Wrap tracking rules safely against single-class evaluation bounds
+    try:
+        calculated_auc = roc_auc_score(y_eval, y_prob)
+    except ValueError:
+        calculated_auc = 0.0  # Handled safely if sample size is too tiny or lacks balanced classes
+        
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     col1.metric("Accuracy", f"{accuracy_score(y_eval, y_pred):.4f}")
-    col2.metric("AUC Score", f"{roc_auc_score(y_eval, y_prob):.4f}")
+    col2.metric("AUC Score", f"{calculated_auc:.4f}")
     col3.metric("Precision", f"{precision_score(y_eval, y_pred, zero_division=0):.4f}")
     col4.metric("Recall", f"{recall_score(y_eval, y_pred, zero_division=0):.4f}")
     col5.metric("F1 Score", f"{f1_score(y_eval, y_pred, zero_division=0):.4f}")
@@ -154,16 +170,21 @@ else:
     
     with left_report_col:
         st.subheader("📋 Classification Report Summary")
+        # Handle unique dynamic class values safely during small uploads
+        unique_labels = np.unique(np.concatenate([y_eval, y_pred]))
+        target_names = ["Benign (0)", "Malignant (1)"] if len(unique_labels) > 1 or 0 in unique_labels else ["Malignant (1)"]
+        
         text_report = classification_report(
             y_eval, y_pred, 
-            target_names=["Benign (0)", "Malignant (1)"], 
+            labels=unique_labels,
+            target_names=target_names[:len(unique_labels)],
             zero_division=0
         )
         st.code(text_report, language="text")
         
     with right_report_col:
         st.subheader("🧩 Confusion Matrix Heatmap Representation")
-        cm = confusion_matrix(y_eval, y_pred)
+        cm = confusion_matrix(y_eval, y_pred, labels=[0, 1])
         
         # Build stylized visualization table dataframe
         cm_df = pd.DataFrame(
@@ -174,7 +195,7 @@ else:
         st.dataframe(cm_df.style.background_gradient(cmap="Blues"), use_container_width=True)
         
         # Breakdown raw counts
-        tn, fp, fn, tp = cm.ravel() if cm.size == 4 else (0,0,0,0)
+        tn, fp, fn, tp = cm.ravel()
         st.markdown(f"""
         * **True Negatives (TN)**: `{tn}` instances correctly identified as Benign.
         * **False Positives (FP)**: `{fp}` samples incorrectly flagged as Malignant.
