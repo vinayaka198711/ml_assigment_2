@@ -76,7 +76,7 @@ def train_base_pipeline():
 models, scaler, default_X_test, default_y_test = train_base_pipeline()
 
 if models is None:
-    st.error(f"❌ Missing base training asset '{DATA_FILE}' in your project directory root. Please add it to unlock pipeline functionalities.")
+    st.error(f"❌ Missing base training asset '{DATA_FILE}' in your project directory root. Please upload it to your GitHub Repository.")
 else:
     # -------------------------------------------------------------------------
     # FEATURE A: DATASET UPLOAD OPTION (CSV)
@@ -105,11 +105,11 @@ else:
             if 'id' in uploaded_df.columns:
                 uploaded_df = uploaded_df.drop(columns=['id'])
                 
-            # Verify and scale incoming test feature dimensions
+            # FIXED LOGIC: Extract column count using .shape[1] instead of the tuple object
             if uploaded_df.shape[1] == 30:
                 # Transform into a DataFrame to preserve feature column tracking names
                 X_eval = pd.DataFrame(scaler.transform(uploaded_df), columns=default_X_test.columns)
-                st.success(f"✅ Successfully loaded custom test array with {uploaded_df.shape[0]} evaluation targets.")
+                st.success(f"✅ Successfully loaded custom test array with {uploaded_df.shape[0]} samples.")
             else:
                 st.warning(f"⚠️ Column shape mismatch. Upload features {uploaded_df.shape[1]} attributes instead of the requested 30 dimensions. Falling back to internal test set cache.")
         except Exception as e:
