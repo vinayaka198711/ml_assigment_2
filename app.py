@@ -107,7 +107,13 @@ else:
             if 'id' in uploaded_df.columns:
                 uploaded_df = uploaded_df.drop(columns=['id'])
                 
-            # FIXED TUPLE LENGTH LOGIC: Evaluate the length of the column shape tuple slice
+            # --- Normalize column names to match training format ---
+            uploaded_df.columns = uploaded_df.columns.str.strip().str.lower()
+            uploaded_df.columns = uploaded_df.columns.str.replace(' ', '_')
+            uploaded_df.columns = uploaded_df.columns.str.replace('_error', '_se')
+            # ------------------------------------------------------
+
+            # FIXED TUPLE LENGTH LOGIC: Evaluate shape column count properly via index [1]
             if uploaded_df.shape[1] == 30:
                 X_eval = pd.DataFrame(scaler.transform(uploaded_df), columns=default_X_test.columns)
                 
@@ -115,7 +121,7 @@ else:
                 if uploaded_y is not None and len(uploaded_y) == len(uploaded_df):
                     y_eval = uploaded_y
                 else:
-                    # Provide dummy array targets matching exact length of the file to stop 114 vs 2 crashes
+                    # Provide dummy array targets matching exact length of the file to stop crashes
                     y_eval = np.zeros(len(uploaded_df), dtype=int)
                     st.info(f"ℹ️ No target labels found in CSV. Metrics calculated using a dummy reference matching your {len(uploaded_df)} samples.")
                     
@@ -150,7 +156,7 @@ else:
     try:
         calculated_auc = roc_auc_score(y_eval, y_prob)
     except ValueError:
-        calculated_auc = 0.0  # Handled safely if sample size is too tiny or lacks balanced classes
+        calculated_auc = 0.0  
         
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     col1.metric("Accuracy", f"{accuracy_score(y_eval, y_pred):.4f}")
@@ -169,36 +175,11 @@ else:
     left_report_col, right_report_col = st.columns(2)
     
     with left_report_col:
-        st.subheader("📋 Classification Report Summary")
-        # Handle unique dynamic class values safely during small uploads
-        unique_labels = np.unique(np.concatenate([y_eval, y_pred]))
-        target_names = ["Benign (0)", "Malignant (1)"] if len(unique_labels) > 1 or 0 in unique_labels else ["Malignant (1)"]
-        
-        text_report = classification_report(
-            y_eval, y_pred, 
-            labels=unique_labels,
-            target_names=target_names[:len(unique_labels)],
-            zero_division=0
-        )
-        st.code(text_report, language="text")
+        st.subheader("Confusion Matrix")
+        cm = confusion_matrix(y_eval, y_pred)
+        st.write(cm)
         
     with right_report_col:
-        st.subheader("🧩 Confusion Matrix Heatmap Representation")
-        cm = confusion_matrix(y_eval, y_pred, labels=[0, 1])
-        
-        # Build stylized visualization table dataframe
-        cm_df = pd.DataFrame(
-            cm,
-            index=["Actual Benign (0)", "Actual Malignant (1)"],
-            columns=["Predicted Benign (0)", "Predicted Malignant (1)"]
-        )
-        st.dataframe(cm_df.style.background_gradient(cmap="Blues"), use_container_width=True)
-        
-        # Breakdown raw counts
-        tn, fp, fn, tp = cm.ravel()
-        st.markdown(f"""
-        * **True Negatives (TN)**: `{tn}` instances correctly identified as Benign.
-        * **False Positives (FP)**: `{fp}` samples incorrectly flagged as Malignant.
-        * **False Negatives (FN)**: `{fn}` malignant cases missed by the classifier pipeline.
-        * **True Positives (TP)**: `{tp}` instances correctly identified as Malignant.
-        """)
+        st.subheader("Classification Report")
+        report = classification_report(y_eval, y_pred, output_dict=True, zero_division=0)
+        st.dataframe(pd.DataFrame(report).transpose())
