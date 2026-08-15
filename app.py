@@ -17,7 +17,8 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import RandomForestClassifier
 
-st.set_page_config(page_title="WDBC ML Pipeline Web UI", layout="wide")
+# Application Page Setup
+st.set_page_config(page_title="WDBC ML Assignment Pipeline", layout="wide")
 st.title("🩺 Breast Cancer Diagnostic (WDBC) Machine Learning Application")
 
 DATA_FILE = "wdbc.data"
@@ -26,7 +27,7 @@ DATA_FILE = "wdbc.data"
 def train_base_pipeline():
     """Reads wdbc.data with explicit column labels, preprocesses, and trains all 5 baseline models."""
     if not os.path.exists(DATA_FILE):
-        return None, None, None, None
+        return None, None, None, None, None
         
     column_names = [
         'id', 'diagnosis',
@@ -66,22 +67,23 @@ def train_base_pipeline():
         
     return trained_models, scaler, X_test_scaled, y_test, le
 
-# Load pipeline framework assets
-pipeline_data = train_base_pipeline()
+# Run underlying model pipeline architecture 
+pipeline_assets = train_base_pipeline()
 
-if pipeline_data[0] is None:
-    st.error(f"❌ Missing base training asset '{DATA_FILE}' in your project directory root. Please place it next to app.py.")
+if pipeline_assets is None:
+    st.error(f"❌ Missing base training asset '{DATA_FILE}' in your project directory root. Please upload it to allow training.")
 else:
-    models, scaler, default_X_test, default_y_test, le = pipeline_data
+    models, scaler, default_X_test, default_y_test, le = pipeline_assets
     
     # -------------------------------------------------------------------------
-    # FEATURE A: DATASET UPLOAD OPTION (CSV) WITH AUTO-CLEANING
+    # FEATURE A: DATASET UPLOAD OPTION (CSV) - [1 MARK]
     # -------------------------------------------------------------------------
-    st.header("📂 a. Dataset Upload Option (CSV Test Data)")
-    st.info("💡 Upload your `test_data.csv` file. Columns containing spaces or 'error' are cleaned automatically.")
+    st.header("📂 a. Dataset Upload Option (CSV Test Data Only)")
+    st.info("💡 **Capacity Optimization Rule**: Streamlit cloud storage tiers use limited tracking allocations. Upload a tailored `test_data.csv` file featuring structural test inputs below.")
     
-    uploaded_file = st.file_uploader("Upload test dataset CSV file:", type=["csv"])
+    uploaded_file = st.file_uploader("Upload your test dataset CSV file:", type=["csv"])
     
+    # Establish fallback baseline context
     X_eval = default_X_test
     y_eval = default_y_test.values
     
@@ -92,8 +94,9 @@ else:
             uploaded_y = None
             if 'diagnosis' in uploaded_df.columns:
                 diag_col = uploaded_df['diagnosis']
+                # Force text arrays to transform safely into metric integers
                 if diag_col.dtype == object or diag_col.astype(str).str.contains('B|M|b|m').any():
-                    uploaded_y = diag_col.map({'B': 1, 'M': 1, 'b': 0, 'm': 0}).values
+                    uploaded_y = diag_col.map({'B': 0, 'M': 1, 'b': 0, 'm': 1}).values
                     if pd.isna(uploaded_y).any():
                         uploaded_y = le.transform(diag_col.astype(str))
                 else:
@@ -103,7 +106,7 @@ else:
             if 'id' in uploaded_df.columns:
                 uploaded_df = uploaded_df.drop(columns=['id'])
                 
-            # Clean incoming column names (spaces and error mismatches)
+            # Clean and align feature headers (removes space & error variations)
             uploaded_df.columns = uploaded_df.columns.str.strip().str.lower()
             uploaded_df.columns = uploaded_df.columns.str.replace(' ', '_')
             uploaded_df.columns = uploaded_df.columns.str.replace('_error', '_se')
@@ -114,69 +117,61 @@ else:
                     y_eval = np.array(uploaded_y, dtype=int)
                 else:
                     y_eval = np.zeros(len(uploaded_df), dtype=int)
-                    st.info(f"ℹ️ No targets found in CSV. Using dummy markers for {len(uploaded_df)} samples.")
-                st.success(f"✅ Successfully processed custom test array with {len(uploaded_df)} rows.")
+                    st.info(f"ℹ️ No target labels found in CSV. Metrics calculated using a dummy reference matching your {len(uploaded_df)} samples.")
+                st.success(f"✅ Successfully loaded custom test array with {len(uploaded_df)} samples.")
             else:
-                st.warning(f"⚠️ Shape mismatch: Expected 30 features, got {uploaded_df.shape[1]}. Using default cache.")
+                st.warning(f"⚠️ Column shape mismatch. Upload features {uploaded_df.shape[1]} attributes instead of 30 dimensions. Falling back to default test cache.")
         except Exception as e:
-            st.error(f"❌ Upload parsing error: {str(e)}")
+            st.error(f"❌ Upload parsing failure: {str(e)}")
 
     # -------------------------------------------------------------------------
-    # COMPREHENSIVE COMPARATIVE PERFORMANCE MATRIX (All Models)
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.header("📊 Comparative Evaluation Performance Matrix")
-    st.write("Scorecard evaluating all implemented classifiers simultaneously on the active evaluation dataset:")
-
-    metrics_summary = []
-    for name, model in models.items():
-        y_pred = model.predict(X_eval)
-        try:
-            y_prob = model.predict_proba(X_eval)[:, 1]
-            auc = roc_auc_score(y_eval, y_prob)
-        except (AttributeError, ValueError):
-            auc = 0.0
-
-        metrics_summary.append({
-            "Model Name": name,
-            "Accuracy": round(accuracy_score(y_eval, y_pred), 4),
-            "AUC Score": round(auc, 4),
-            "Precision": round(precision_score(y_eval, y_pred, zero_division=0), 4),
-            "Recall": round(recall_score(y_eval, y_pred, zero_division=0), 4),
-            "F1 Score": round(f1_score(y_eval, y_pred, zero_division=0), 4),
-            "MCC Score": round(matthews_corrcoef(y_eval, y_pred), 4)
-        })
-
-    results_table = pd.DataFrame(metrics_summary)
-    st.dataframe(results_table, use_container_width=True)
-    
-    # Download button for performance scorecard
-    st.download_button(
-        label="📥 Download Performance Matrix CSV",
-        data=results_table.to_csv(index=False),
-        file_name="streamlit_evaluation_report.csv",
-        mime="text/csv"
-    )
-
-    # -------------------------------------------------------------------------
-    # SINGLE MODEL DEEP INSPECTION DROPDOWN
+    # FEATURE B: MODEL SELECTION DROPDOWN - [1 MARK]
     # -------------------------------------------------------------------------
     st.markdown("---")
-    st.header("⚙️ Single Model Deep Inspection")
+    st.header("⚙️ b. Model Selection Dropdown")
     selected_model_name = st.selectbox(
-        "Choose a model to examine breakdown statistics:",
+        "Choose an implemented machine learning architecture to evaluate:",
         options=list(models.keys())
     )
     
+    # Score metrics using selected active architecture
     active_model = models[selected_model_name]
-    y_pred_single = active_model.predict(X_eval)
+    y_pred = active_model.predict(X_eval)
     
-    left_col, right_col = st.columns(2)
-    with left_col:
+    try:
+        y_prob = active_model.predict_proba(X_eval)[:, 1]
+        calculated_auc = roc_auc_score(y_eval, y_prob)
+    except (AttributeError, ValueError):
+        calculated_auc = 0.0
+
+    # -------------------------------------------------------------------------
+    # FEATURE C: DISPLAY OF EVALUATION METRICS - [1 MARK]
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.header(f"📊 c. Display of Evaluation Metrics for {selected_model_name}")
+    
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1.metric("Accuracy", f"{accuracy_score(y_eval, y_pred):.4f}")
+    col2.metric("AUC Score", f"{calculated_auc:.4f}")
+    col3.metric("Precision", f"{precision_score(y_eval, y_pred, zero_division=0):.4f}")
+    col4.metric("Recall", f"{recall_score(y_eval, y_pred, zero_division=0):.4f}")
+    col5.metric("F1 Score", f"{f1_score(y_eval, y_pred, zero_division=0):.4f}")
+    col6.metric("MCC Score", f"{matthews_corrcoef(y_eval, y_pred):.4f}")
+
+    # -------------------------------------------------------------------------
+    # FEATURE D: CONFUSION MATRIX & CLASSIFICATION REPORT - [1 MARK]
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.header("🔬 d. Advanced Diagnostic Analysis Reports")
+    
+    left_report_col, right_report_col = st.columns(2)
+    
+    with left_report_col:
         st.subheader("Confusion Matrix")
-        st.write(confusion_matrix(y_eval, y_pred_single))
+        cm = confusion_matrix(y_eval, y_pred)
+        st.dataframe(pd.DataFrame(cm, index=['True Benign (0)', 'True Malignant (1)'], columns=['Pred Benign (0)', 'Pred Malignant (1)']))
         
-    with right_col:
+    with right_report_col:
         st.subheader("Classification Report")
-        report = classification_report(y_eval, y_pred_single, output_dict=True, zero_division=0)
+        report = classification_report(y_eval, y_pred, output_dict=True, zero_division=0)
         st.dataframe(pd.DataFrame(report).transpose())
