@@ -76,9 +76,9 @@ else:
     models, scaler, default_X_test, default_y_test, le = pipeline_assets
     
     # -------------------------------------------------------------------------
-    # FEATURE A: DATASET UPLOAD OPTION (CSV) - [1 MARK]
+    # FEATURE A: DATASET UPLOAD OPTION (CSV)
     # -------------------------------------------------------------------------
-    st.header("📂 a. Dataset Upload Option (CSV Test Data Only)")
+    st.header("📂 Dataset Upload Option (CSV Test Data Only)")
     st.info("💡 **Capacity Optimization Rule**: Streamlit cloud storage tiers use limited tracking allocations. Upload a tailored `test_data.csv` file featuring structural test inputs below.")
     
     uploaded_file = st.file_uploader("Upload your test dataset CSV file:", type=["csv"])
@@ -125,10 +125,10 @@ else:
             st.error(f"❌ Upload parsing failure: {str(e)}")
 
     # -------------------------------------------------------------------------
-    # FEATURE B: MODEL SELECTION DROPDOWN - [1 MARK]
+    # FEATURE B: MODEL SELECTION DROPDOWN
     # -------------------------------------------------------------------------
     st.markdown("---")
-    st.header("⚙️ b. Model Selection Dropdown")
+    st.header("⚙Model Selection Dropdown")
     selected_model_name = st.selectbox(
         "Choose an implemented machine learning architecture to evaluate:",
         options=list(models.keys())
@@ -145,10 +145,10 @@ else:
         calculated_auc = 0.0
 
     # -------------------------------------------------------------------------
-    # FEATURE C: DISPLAY OF EVALUATION METRICS - [1 MARK]
+    # FEATURE C: DISPLAY OF EVALUATION METRICS
     # -------------------------------------------------------------------------
     st.markdown("---")
-    st.header(f"📊 c. Display of Evaluation Metrics for {selected_model_name}")
+    st.header(f"📊 Display of Evaluation Metrics for {selected_model_name}")
     
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     col1.metric("Accuracy", f"{accuracy_score(y_eval, y_pred):.4f}")
@@ -159,10 +159,10 @@ else:
     col6.metric("MCC Score", f"{matthews_corrcoef(y_eval, y_pred):.4f}")
 
     # -------------------------------------------------------------------------
-    # FEATURE D: CONFUSION MATRIX & CLASSIFICATION REPORT - [1 MARK]
+    # FEATURE D: CONFUSION MATRIX & CLASSIFICATION REPORT
     # -------------------------------------------------------------------------
     st.markdown("---")
-    st.header("🔬 d. Advanced Diagnostic Analysis Reports")
+    st.header("🔬 CONFUSION MATRIX & CLASSIFICATION REPORT")
     
     left_report_col, right_report_col = st.columns(2)
     
